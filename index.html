@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Prototipo Carpool Guayaquil - ESPOL</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    body { margin:0; padding:0; font-family: Arial, sans-serif; background:#f8f9fa; height:100vh; overflow:hidden; transition: background-color 0.5s; }
+    
+    /* Estilo para la portada con imagen de fondo y tono bajo */
+    #splash { 
+      position:fixed; top:0; left:0; right:0; bottom:0; 
+      background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('espol.jpg') center/cover no-repeat; 
+      color:white; z-index:5000; 
+      display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; 
+      transition:opacity 1s; 
+    }
+    #splash.hidden { opacity:0; pointer-events:none; }
+    #splash img { max-width:80%; height:auto; margin:20px 0; border-radius:15px; box-shadow:0 10px 20px rgba(0,0,0,0.3); }
+    #splash h1 { font-size:2.5em; margin:10px; text-shadow:2px 2px 4px rgba(0,0,0,0.7); }
+    #splash p { font-size:1.2em; margin:5px; text-shadow:1px 1px 3px rgba(0,0,0,0.7); }
+    #splash input { padding:15px; font-size:1.5em; width:80%; max-width:400px; margin:20px 0; border:none; border-radius:10px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
+    #splash button { background:#27ae60; color:white; border:none; padding:15px 40px; font-size:1.5em; border-radius:50px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
+    
+    #header { background:#c0392b; color:white; padding:12px; text-align:center; font-size:1.3em; font-weight:bold; position:relative; }
+    #confirm-bar { 
+      background:#3498db; color:white; padding:15px; text-align:center; font-size:1.4em; font-weight:bold; 
+      position:fixed; top:60px; left:0; right:0; z-index:999; box-shadow:0 4px 10px rgba(0,0,0,0.3);
+      border: 3px dashed white; transition: all 0.3s;
+    }
+    #confirm-bar.full { background:#e74c3c; border: none; }
+    #confirm-bar.highlight { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    #map { height:calc(100vh - 60px); width:100%; margin-top:60px; }
+    .avatar { border-radius:50%; width:65px; height:65px; border:6px solid #ffd700; box-shadow:0 8px 16px rgba(0,0,0,0.6); 
+      text-align:center; line-height:65px; font-weight:bold; color:white; font-size:1.6em; transition: all 0.3s; }
+    .confirmed-avatar { border:6px solid #27ae60 !important; box-shadow:0 0 20px #27ae60; transform: scale(1.1); }
+    #menu-btn { position:absolute; top:10px; right:15px; font-size:1.8em; color:white; cursor:pointer; z-index:1000; }
+    #side-menu { position:fixed; top:0; right:-300px; width:280px; height:100%; background:#fff; box-shadow:-5px 0 15px rgba(0,0,0,0.4); 
+      transition:right 0.3s; z-index:999; padding:20px; }
+    #side-menu.open { right:0; }
+    .menu-item { background:#27ae60; color:white; padding:15px; margin:10px 0; border-radius:8px; text-align:center; font-weight:bold; cursor:pointer; }
+    .menu-item.panic { background:#c0392b; }
+    .list-item { margin:12px 0; font-size:1.1em; padding:8px; border-bottom:1px solid #eee; }
+    #eta-in-menu { font-size:1.6em; color:#c0392b; text-align:center; margin:20px 0; font-weight:bold; }
+    #confirm-time { font-size:1.3em; color:#e67e22; text-align:center; margin:10px 0; font-weight:bold; }
+    .leaflet-popup-content { font-size:1.1em; font-weight:bold; color:#333; text-align:center; }
+    #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #27ae60; color: white; 
+      padding: 16px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1002; display: none; 
+      font-weight: bold; font-size: 1.1em; min-width: 280px; text-align: center; }
+    
+    /* Estilos para simulación 911 */
+    #sos-screen {
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.85); color:white; z-index:3000;
+      display:none; flex-direction:column; justify-content:center; align-items:center;
+      text-align:center; padding:20px;
+    }
+    #sos-screen h1 { font-size:3em; margin-bottom:20px; color:#ff4d4d; }
+    #sos-details { background:rgba(255,255,255,0.1); padding:20px; border-radius:15px; margin:20px 0; width:80%; max-width:500px; }
+    #sos-call-btn { background:#ff4d4d; color:white; border:none; padding:15px 30px; font-size:1.5em; border-radius:50px; cursor:pointer; margin:20px; }
+    #sos-status { font-size:1.8em; margin:20px; color:#00ff00; }
+  </style>
+</head>
+<body>
+  <!-- Pantalla de portada / splash con tu imagen "espol.jpg" como fondo -->
+  <div id="splash">
+    <img src="portada.png" alt="Portada PAO 2025" style="max-height:40vh; border-radius:15px;" />
+    <h1>Carpool</h1>
+    <p>Análisis y Resolución de Problemas</p>
+    <p>Team Solución - Carpool Inteligente ESPOL</p>
+    <p>Escuela Superior Politécnica del Litoral</p>
+    <input type="text" id="user-name-input" placeholder="Ingresa tu nombre" />
+    <button onclick="startApp()">Comenzar</button>
+  </div>
+
+  <div id="header">
+    Carpool Inteligente - Ruta Guayaquil → ESPOL
+    <i id="menu-btn" class="fas fa-bars"></i>
+  </div>
+
+  <div id="confirm-bar" class="confirm-bar">
+    ¡ARRASTRAME AQUÍ PARA CONFIRMAR! (quedan 5 asientos)
+  </div>
+
+  <div id="side-menu">
+    <h3 style="text-align:center; margin-top:0;">Menú</h3>
+    <div id="eta-in-menu">Llegada estimada a ESPOL: 35 min</div>
+    <div id="confirm-time">Tiempo restante para confirmar: 3:00 min</div>
+    <div class="menu-item" onclick="toggleList()">Ver Confirmados</div>
+    <div class="menu-item panic" onclick="triggerPanic()">¡PANIC! / EMERGENCIA</div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="confirmados-list" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:20px; border-radius:12px; max-width:90%; max-height:70%; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.4); z-index:1001;">
+    <button onclick="toggleList()" style="float:right; background:#e74c3c; color:white; border:none; padding:8px 12px; border-radius:6px;">Cerrar</button>
+    <h3>Confirmados</h3>
+    <div id="list-content"></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Pantalla de simulación 911 -->
+  <div id="sos-screen">
+    <h1>¡LLAMANDO AL 911!</h1>
+    <div id="sos-details">
+      <p><strong>Ubicación actual:</strong> <span id="sos-latlon"></span></p>
+      <p><strong>Auto:</strong> Carro simulado (placa ficticia ABC-123)</p>
+      <p><strong>Ruta:</strong> Guayaquil → ESPOL</p>
+      <p><strong>Pasajeros confirmados:</strong> <span id="sos-pasajeros"></span></p>
+    </div>
+    <button id="sos-call-btn">Conectar con Policía (Simulado)</button>
+    <div id="sos-status">Llamando...</div>
+    <button onclick="document.getElementById('sos-screen').style.display='none';" style="margin-top:20px; background:#555; color:white; padding:10px 20px; border:none; border-radius:10px; cursor:pointer;">Cancelar / Salir</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let userName = 'Usuario'; // Default si no ingresa nada
+
+    function startApp() {
+      userName = document.getElementById('user-name-input').value.trim() || 'Usuario Anónimo';
+      document.getElementById('splash').classList.add('hidden');
+      setTimeout(() => {
+        document.getElementById('splash').style.display = 'none';
+        // Actualizar solo el nombre de "Tú"
+        avatarsData[0].name = `${userName} (Tú)`;
+        avatarsData[0].initial = userName.charAt(0).toUpperCase() || 'U';
+        // Re-crear el ícono de "Tú" con el nuevo nombre
+        const tuAv = avatarsData[0];
+        const tuIcon = L.divIcon({html: `<div class="avatar" style="background:${tuAv.color};">${tuAv.initial}</div>`, iconSize: [65,65], iconAnchor: [32.5,32.5]});
+        const tuMarker = L.marker(tuAv.pos, {draggable: true, icon: tuIcon});
+        tuMarkerObj = {marker: tuMarker, av: tuAv};
+        tuMarker.addTo(map);
+        // Re-asignar drag logic (tu código original sin cambios)
+        tuMarker.on('dragstart', () => tuMarker.setOpacity(0.7));
+        tuMarker.on('drag', () => {
+          const btnRect = confirmBar.getBoundingClientRect();
+          const mapRect = map.getContainer().getBoundingClientRect();
+          const containerPoint = map.latLngToContainerPoint(tuMarker.getLatLng());
+          const relativeLeft = btnRect.left - mapRect.left;
+          const relativeRight = btnRect.right - mapRect.left;
+          const relativeTop = btnRect.top - mapRect.top;
+          const relativeBottom = btnRect.bottom - mapRect.top;
+          const isOver = (
+            containerPoint.x >= relativeLeft - 40 &&
+            containerPoint.x <= relativeRight + 40 &&
+            containerPoint.y >= relativeTop - 40 &&
+            containerPoint.y <= relativeBottom + 40
+          );
+          confirmBar.classList.toggle('highlight', isOver);
+        });
+        tuMarker.on('dragend', (e) => {
+          if (confirmationsLocked) {
+            alert('¡Tiempo de confirmación agotado! No se aceptan más asistencias.');
+            tuMarker.setLatLng(tuAv.pos);
+            tuMarker.setOpacity(1);
+            confirmBar.classList.remove('highlight');
+            return;
+          }
+          const latLng = e.target.getLatLng();
+          const containerPoint = map.latLngToContainerPoint(latLng);
+          const btnRect = confirmBar.getBoundingClientRect();
+          const mapRect = map.getContainer().getBoundingClientRect();
+          const relativeLeft = btnRect.left - mapRect.left;
+          const relativeRight = btnRect.right - mapRect.left;
+          const relativeTop = btnRect.top - mapRect.top;
+          const relativeBottom = btnRect.bottom - mapRect.top;
+          const isOverButton = (
+            containerPoint.x >= relativeLeft - 40 &&
+            containerPoint.x <= relativeRight + 40 &&
+            containerPoint.y >= relativeTop - 40 &&
+            containerPoint.y <= relativeBottom + 40
+          );
+          if (isOverButton) {
+            const miNombre = avatarsData[0].name;
+            if (confirmados.has(miNombre)) {
+              alert('¡Ya confirmaste!');
+            } else if (asientosOcupados >= MAX_PASAJEROS) {
+              alert('🚗 El auto ya está lleno!');
+            } else {
+              confirmados.add(miNombre);
+              asientosOcupados++;
+              notificationSound.play().catch(() => {});
+              tuMarker.setIcon(L.divIcon({
+                html: `<div class="avatar confirmed-avatar" style="background:#3498db;">✓</div>`,
+                iconSize: [65,65],
+                iconAnchor: [32.5,32.5]
+              }));
+              updateConfirmButtonText();
+              updateList();
+              alert('¡Confirmado! Quedan ' + (MAX_PASAJEROS - asientosOcupados) + ' asientos.');
+            }
+          }
+          tuMarker.setLatLng(tuAv.pos);
+          tuMarker.setOpacity(1);
+          confirmBar.classList.remove('highlight');
+        });
+        updateConfirmButtonText();
+        updateList();
+        map.invalidateSize();
+      }, 1000);
+    }
+
+    const map = L.map('map', {zoomControl:false}).setView([-2.160, -79.920], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    const espolPos = L.latLng(-2.16056, -79.95028);
+    L.marker(espolPos, {icon: L.icon({iconUrl: 'tortuga.png', iconSize: [60,60], iconAnchor: [30,60]})}).addTo(map);
+
+    const startPos = L.latLng(-2.100, -79.910);
+    const fixedRoute = [
+      startPos, L.latLng(-2.105, -79.905), L.latLng(-2.125, -79.895),
+      L.latLng(-2.145, -79.885), L.latLng(-2.165, -79.875), L.latLng(-2.185, -79.865),
+      L.latLng(-2.195, -79.895), espolPos
+    ];
+    L.polyline(fixedRoute, {color: '#800080', weight: 8, opacity: 0.7}).addTo(map);
+
+    const autoIcon = L.icon({iconUrl: 'carro.png', iconSize: [80,60], iconAnchor: [40,30]});
+    const autoMarker = L.marker(startPos, {icon: autoIcon}).addTo(map);
+
+    let currentProgress = 0;
+    let eta = 35;
+    const etaEl = document.getElementById('eta-in-menu');
+    const confirmBar = document.getElementById('confirm-bar');
+    const TOTAL_TIME = 300000;
+
+    const toast = document.getElementById('toast');
+    const confirmTimeEl = document.getElementById('confirm-time');
+
+    const carPopup = L.popup({closeButton:false, autoClose:false, closeOnClick:false})
+      .setLatLng(startPos)
+      .setContent('<div>el carro<br><strong>Llegada: 35 min</strong></div>')
+      .openOn(map);
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    }
+
+    // Tiempo límite de confirmación (3 minutos)
+    const CONFIRM_LIMIT_SECONDS = 180;
+    let confirmRemaining = CONFIRM_LIMIT_SECONDS;
+    let confirmationsLocked = false;
+
+    const confirmInterval = setInterval(() => {
+      if (confirmRemaining > 0) {
+        confirmRemaining--;
+        const min = Math.floor(confirmRemaining / 60);
+        const sec = confirmRemaining % 60;
+        confirmTimeEl.textContent = `Tiempo restante para confirmar: ${min}:${sec.toString().padStart(2,'0')} min`;
+      } else {
+        confirmationsLocked = true;
+        confirmTimeEl.textContent = "¡Tiempo de confirmación agotado!";
+        confirmTimeEl.style.color = "#c0392b";
+        showToast("¡No se aceptan más confirmaciones! Ruta en marcha.");
+        clearInterval(confirmInterval);
+      }
+    }, 1000);
+
+    function animateMovement() {
+      const start = Date.now();
+      const animate = () => {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / TOTAL_TIME, 1);
+        currentProgress = progress;
+
+        const totalLength = fixedRoute.length - 1;
+        const segment = progress * totalLength;
+        const idx = Math.floor(segment);
+        const frac = segment - idx;
+
+        let currentPos;
+        if (idx < fixedRoute.length - 1) {
+          const current = fixedRoute[idx];
+          const next = fixedRoute[idx + 1];
+          const lat = current.lat + (next.lat - current.lat) * frac;
+          const lng = current.lng + (next.lng - current.lng) * frac;
+          currentPos = [lat, lng];
+          autoMarker.setLatLng(currentPos);
+          carPopup.setLatLng(currentPos);
+        }
+
+        eta = Math.max(0, Math.round(35 * (1 - progress)));
+        etaEl.textContent = `Llegada estimada a ESPOL: ${eta} min`;
+        carPopup.setContent(`<div>el carro<br><strong>Llegada: ${eta} min</strong></div>`);
+
+        if (progress > 0.01 && progress < 0.99) {
+          avatarsData.forEach((av, i) => {
+            if (av.draggable) return;
+            if (confirmados.has(av.name) && markers[i] && markers[i].marker && markers[i].marker._map) {
+              const dist = map.distance(currentPos, av.pos);
+              if (dist < 150) {
+                map.removeLayer(markers[i].marker);
+                showToast(`El estudiante ${av.name} ha sido recogido ✓`);
+              }
+            }
+          });
+        }
+
+        if (progress < 1) requestAnimationFrame(animate);
+      };
+      animate();
+    }
+    animateMovement();
+
+    // Config cupos
+    const MAX_PASAJEROS = 5;
+    let asientosOcupados = 0;
+    const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2570/2570.wav');
+
+    const avatarsData = [
+      {name: 'Javier Fernando Chávez Anchundia (Tú)', color:'#3498db', initial:'J', pos: L.latLng(-2.195, -79.895), draggable: true},
+      {name: 'Samantha Sulay Luna Malta', color:'#9b59b6', initial:'S', pos: L.latLng(-2.105, -79.905), draggable: false},
+      {name: 'Allan Steeven Espinoza Arcaya', color:'#2ecc71', initial:'A', pos: L.latLng(-2.125, -79.895), draggable: false},
+      {name: 'Steeven Jahir Pérez González', color:'#e74c3c', initial:'S', pos: L.latLng(-2.145, -79.885), draggable: false},
+      {name: 'Alexis Alejandro Saca Chauca', color:'#f39c12', initial:'A', pos: L.latLng(-2.165, -79.875), draggable: false},
+      {name: 'Rogger Christopher Gaibor Mejía', color:'#34495e', initial:'R', pos: L.latLng(-2.185, -79.865), draggable: false}
+    ];
+
+    const confirmados = new Set();
+    let markers = [];
+    let tuMarkerObj = null;
+
+    avatarsData.forEach(av => {
+      const icon = L.divIcon({html: `<div class="avatar" style="background:${av.color};">${av.initial}</div>`, iconSize: [65,65], iconAnchor: [32.5,32.5]});
+      const marker = L.marker(av.pos, {draggable: av.draggable, icon});
+      markers.push({marker, av});
+
+      if (av.draggable) {
+        tuMarkerObj = {marker, av};
+        marker.addTo(map);
+      } else {
+        if (Math.random() > 0.4 && asientosOcupados < MAX_PASAJEROS) {
+          confirmados.add(av.name);
+          asientosOcupados++;
+          marker.setIcon(L.divIcon({html: `<div class="avatar confirmed-avatar" style="background:${av.color};">✓</div>`, iconSize: [65,65], iconAnchor: [32.5,32.5]}));
+          marker.addTo(map);
+          notificationSound.play().catch(() => {});
+        }
+      }
+    });
+
+    function updateConfirmButtonText() {
+      const quedan = MAX_PASAJEROS - asientosOcupados;
+      confirmBar.innerHTML = quedan > 0 
+        ? `¡ARRASTRAME AQUÍ PARA CONFIRMAR! (quedan ${quedan} asientos)` 
+        : `🚗 ¡AUTO LLENO! No hay más cupos`;
+      confirmBar.className = 'confirm-bar' + (quedan > 0 ? '' : ' full');
+    }
+    updateConfirmButtonText();
+
+    if (tuMarkerObj) {
+      const marker = tuMarkerObj.marker;
+      const originalPos = tuMarkerObj.av.pos;
+
+      marker.on('dragstart', () => marker.setOpacity(0.7));
+
+      marker.on('drag', () => {
+        const btnRect = confirmBar.getBoundingClientRect();
+        const mapRect = map.getContainer().getBoundingClientRect();
+        const containerPoint = map.latLngToContainerPoint(marker.getLatLng());
+        const relativeLeft = btnRect.left - mapRect.left;
+        const relativeRight = btnRect.right - mapRect.left;
+        const relativeTop = btnRect.top - mapRect.top;
+        const relativeBottom = btnRect.bottom - mapRect.top;
+
+        const isOver = (
+          containerPoint.x >= relativeLeft - 40 &&
+          containerPoint.x <= relativeRight + 40 &&
+          containerPoint.y >= relativeTop - 40 &&
+          containerPoint.y <= relativeBottom + 40
+        );
+
+        confirmBar.classList.toggle('highlight', isOver);
+      });
+
+      marker.on('dragend', (e) => {
+        if (confirmationsLocked) {
+          alert('¡Tiempo de confirmación agotado! No se aceptan más asistencias.');
+          marker.setLatLng(originalPos);
+          marker.setOpacity(1);
+          confirmBar.classList.remove('highlight');
+          return;
+        }
+
+        const latLng = e.target.getLatLng();
+        const containerPoint = map.latLngToContainerPoint(latLng);
+        const btnRect = confirmBar.getBoundingClientRect();
+        const mapRect = map.getContainer().getBoundingClientRect();
+
+        const relativeLeft = btnRect.left - mapRect.left;
+        const relativeRight = btnRect.right - mapRect.left;
+        const relativeTop = btnRect.top - mapRect.top;
+        const relativeBottom = btnRect.bottom - mapRect.top;
+
+        const isOverButton = (
+          containerPoint.x >= relativeLeft - 40 &&
+          containerPoint.x <= relativeRight + 40 &&
+          containerPoint.y >= relativeTop - 40 &&
+          containerPoint.y <= relativeBottom + 40
+        );
+
+        if (isOverButton) {
+          const miNombre = avatarsData[0].name;
+
+          if (confirmados.has(miNombre)) {
+            alert('¡Ya confirmaste!');
+          } else if (asientosOcupados >= MAX_PASAJEROS) {
+            alert('🚗 El auto ya está lleno!');
+          } else {
+            confirmados.add(miNombre);
+            asientosOcupados++;
+            notificationSound.play().catch(() => {});
+
+            marker.setIcon(L.divIcon({
+              html: `<div class="avatar confirmed-avatar" style="background:#3498db;">✓</div>`,
+              iconSize: [65,65],
+              iconAnchor: [32.5,32.5]
+            }));
+
+            updateConfirmButtonText();
+            updateList();
+            alert('¡Confirmado! Quedan ' + (MAX_PASAJEROS - asientosOcupados) + ' asientos.');
+          }
+        }
+
+        marker.setLatLng(originalPos);
+        marker.setOpacity(1);
+        confirmBar.classList.remove('highlight');
+      });
+    }
+
+    function updateList() {
+      document.getElementById('list-content').innerHTML = avatarsData.map(av => 
+        `<div class="list-item">${av.name} - ${confirmados.has(av.name) ? '✓ Confirmado' : '? Pendiente'}</div>`
+      ).join('');
+    }
+    updateList();
+
+    function toggleList() {
+      document.getElementById('confirmados-list').style.display = 
+        document.getElementById('confirmados-list').style.display === 'none' ? 'block' : 'none';
+    }
+
+    function triggerPanic() {
+      const sosScreen = document.getElementById('sos-screen');
+      const sosLatLon = document.getElementById('sos-latlon');
+      const sosPasajeros = document.getElementById('sos-pasajeros');
+      const sosStatus = document.getElementById('sos-status');
+
+      const currentCenter = autoMarker.getLatLng();
+      sosLatLon.textContent = currentCenter.lat.toFixed(6) + ', ' + currentCenter.lng.toFixed(6);
+
+      sosPasajeros.textContent = Array.from(confirmados).join(', ') || 'Ninguno aún';
+
+      sosStatus.textContent = "Llamando...";
+      sosScreen.style.display = 'flex';
+
+      const ringtone = new Audio('https://assets.mixkit.co/active_storage/sfx/2570/2570.wav');
+      ringtone.loop = true;
+      ringtone.volume = 0.6;
+      ringtone.play();
+
+      setTimeout(() => {
+        sosStatus.textContent = "¡Conectado! Ubicación y detalles del viaje compartidos con el 911. Ayuda en camino.";
+        ringtone.pause();
+      }, 5000);
+
+      document.getElementById('sos-call-btn').onclick = () => {
+        sosStatus.textContent = "¡Llamada establecida! Policía recibirá tu ubicación GPS y datos del carpool.";
+        sosStatus.style.color = "#00ff00";
+      };
+
+      setTimeout(() => {
+        if (sosScreen.style.display === 'flex') {
+          sosScreen.style.display = 'none';
+          showToast("Simulación de llamada al 911 completada - Seguridad activada.");
+        }
+      }, 15000);
+    }
+
+    document.getElementById('menu-btn').onclick = () => {
+      document.getElementById('side-menu').classList.toggle('open');
+    };
+
+    setTimeout(() => map.invalidateSize(), 300);
+  </script>
+</body>
+</html>
