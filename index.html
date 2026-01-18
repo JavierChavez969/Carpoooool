@@ -9,7 +9,6 @@
   <style>
     body { margin:0; padding:0; font-family: Arial, sans-serif; background:#f8f9fa; height:100vh; overflow:hidden; transition: background-color 0.5s; }
     
-    /* Estilo para la portada con imagen de fondo y tono bajo */
     #splash { 
       position:fixed; top:0; left:0; right:0; bottom:0; 
       background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('espol.jpg') center/cover no-repeat; 
@@ -38,10 +37,12 @@
     .confirmed-avatar { border:6px solid #27ae60 !important; box-shadow:0 0 20px #27ae60; transform: scale(1.1); }
     #menu-btn { position:absolute; top:10px; right:15px; font-size:1.8em; color:white; cursor:pointer; z-index:1000; }
     #side-menu { position:fixed; top:0; right:-300px; width:280px; height:100%; background:#fff; box-shadow:-5px 0 15px rgba(0,0,0,0.4); 
-      transition:right 0.3s; z-index:999; padding:20px; }
+      transition:right 0.3s; z-index:999; padding:20px; overflow-y:auto; }
     #side-menu.open { right:0; }
     .menu-item { background:#27ae60; color:white; padding:15px; margin:10px 0; border-radius:8px; text-align:center; font-weight:bold; cursor:pointer; }
     .menu-item.panic { background:#c0392b; }
+    .menu-item.info { background:#3498db; }
+    .menu-item.rate { background:#f39c12; }
     .list-item { margin:12px 0; font-size:1.1em; padding:8px; border-bottom:1px solid #eee; }
     #eta-in-menu { font-size:1.6em; color:#c0392b; text-align:center; margin:20px 0; font-weight:bold; }
     #confirm-time { font-size:1.3em; color:#e67e22; text-align:center; margin:10px 0; font-weight:bold; }
@@ -50,7 +51,6 @@
       padding: 16px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1002; display: none; 
       font-weight: bold; font-size: 1.1em; min-width: 280px; text-align: center; }
     
-    /* Estilos para simulación 911 */
     #sos-screen {
       position: fixed; top:0; left:0; right:0; bottom:0;
       background: rgba(0,0,0,0.85); color:white; z-index:3000;
@@ -61,10 +61,31 @@
     #sos-details { background:rgba(255,255,255,0.1); padding:20px; border-radius:15px; margin:20px 0; width:80%; max-width:500px; }
     #sos-call-btn { background:#ff4d4d; color:white; border:none; padding:15px 30px; font-size:1.5em; border-radius:50px; cursor:pointer; margin:20px; }
     #sos-status { font-size:1.8em; margin:20px; color:#00ff00; }
+
+    #driver-info { 
+      display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); 
+      background:#fff; padding:25px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); 
+      z-index:1002; max-width:90%; width:400px; text-align:center; 
+    }
+    #driver-info h3 { margin-top:0; color:#c0392b; }
+    #driver-info p { margin:8px 0; font-size:1.1em; }
+    #driver-info button { background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; margin-top:15px; }
+
+    #rating-modal {
+      display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:#fff; padding:25px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+      z-index:1002; max-width:90%; width:400px; text-align:center;
+    }
+    #rating-modal h3 { margin-top:0; color:#f39c12; }
+    .stars { font-size:2.5em; margin:15px 0; cursor:pointer; }
+    .star { color:#ddd; transition: color 0.2s; }
+    .star.selected, .star:hover { color:#f39c12; }
+    #rating-modal textarea { width:100%; height:80px; padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:8px; resize:none; }
+    #rating-modal button { background:#27ae60; color:white; border:none; padding:12px 30px; border-radius:8px; cursor:pointer; margin:10px; }
+    #rating-modal .close-btn { background:#e74c3c; }
   </style>
 </head>
 <body>
-  <!-- Pantalla de portada / splash con tu imagen "espol.jpg" como fondo -->
   <div id="splash">
     <img src="portada.png" alt="Portada PAO 2025" style="max-height:40vh; border-radius:15px;" />
     <h1>Carpool</h1>
@@ -89,6 +110,8 @@
     <div id="eta-in-menu">Llegada estimada a ESPOL: 35 min</div>
     <div id="confirm-time">Tiempo restante para confirmar: 3:00 min</div>
     <div class="menu-item" onclick="toggleList()">Ver Confirmados</div>
+    <div class="menu-item info" onclick="showDriverInfo()">Info Conductor y Carro</div>
+    <div class="menu-item rate" onclick="showRatingModal()">Calificar Servicio</div>
     <div class="menu-item panic" onclick="triggerPanic()">¡PANIC! / EMERGENCIA</div>
   </div>
 
@@ -102,7 +125,32 @@
 
   <div id="toast"></div>
 
-  <!-- Pantalla de simulación 911 -->
+  <div id="driver-info">
+    <h3>Información del Conductor y Carro</h3>
+    <p><strong>Conductor:</strong> Carlos Andrés Mendoza</p>
+    <p><strong>Edad:</strong> 32 años</p>
+    <p><strong>Teléfono:</strong> 099 123 4567</p>
+    <p><strong>Carro:</strong> Toyota Yaris 2020</p>
+    <p><strong>Placa:</strong> GYE-7894</p>
+    <p><strong>Color:</strong> Plata</p>
+    <p><strong>Capacidad:</strong> 5 pasajeros</p>
+    <button onclick="document.getElementById('driver-info').style.display='none';">Cerrar</button>
+  </div>
+
+  <div id="rating-modal">
+    <h3>Calificar Servicio</h3>
+    <div class="stars">
+      <span class="star" data-value="1">★</span>
+      <span class="star" data-value="2">★</span>
+      <span class="star" data-value="3">★</span>
+      <span class="star" data-value="4">★</span>
+      <span class="star" data-value="5">★</span>
+    </div>
+    <textarea id="rating-comment" placeholder="Deja tu comentario (opcional)..."></textarea>
+    <button onclick="submitRating()">Enviar Calificación</button>
+    <button class="close-btn" onclick="closeRatingModal()">Cerrar</button>
+  </div>
+
   <div id="sos-screen">
     <h1>¡LLAMANDO AL 911!</h1>
     <div id="sos-details">
@@ -118,23 +166,20 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    let userName = 'Usuario'; // Default si no ingresa nada
+    let userName = 'Usuario';
 
     function startApp() {
       userName = document.getElementById('user-name-input').value.trim() || 'Usuario Anónimo';
       document.getElementById('splash').classList.add('hidden');
       setTimeout(() => {
         document.getElementById('splash').style.display = 'none';
-        // Actualizar solo el nombre de "Tú"
         avatarsData[0].name = `${userName} (Tú)`;
         avatarsData[0].initial = userName.charAt(0).toUpperCase() || 'U';
-        // Re-crear el ícono de "Tú" con el nuevo nombre
         const tuAv = avatarsData[0];
         const tuIcon = L.divIcon({html: `<div class="avatar" style="background:${tuAv.color};">${tuAv.initial}</div>`, iconSize: [65,65], iconAnchor: [32.5,32.5]});
         const tuMarker = L.marker(tuAv.pos, {draggable: true, icon: tuIcon});
         tuMarkerObj = {marker: tuMarker, av: tuAv};
         tuMarker.addTo(map);
-        // Re-asignar drag logic (tu código original sin cambios)
         tuMarker.on('dragstart', () => tuMarker.setOpacity(0.7));
         tuMarker.on('drag', () => {
           const btnRect = confirmBar.getBoundingClientRect();
@@ -204,6 +249,41 @@
       }, 1000);
     }
 
+    function showDriverInfo() {
+      document.getElementById('driver-info').style.display = 'block';
+    }
+
+    function showRatingModal() {
+      document.getElementById('rating-modal').style.display = 'block';
+      document.querySelectorAll('.star').forEach(s => s.classList.remove('selected'));
+      document.getElementById('rating-comment').value = '';
+    }
+
+    function closeRatingModal() {
+      document.getElementById('rating-modal').style.display = 'none';
+    }
+
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('star')) {
+        const value = parseInt(e.target.dataset.value);
+        document.querySelectorAll('.star').forEach((star, index) => {
+          star.classList.toggle('selected', index < value);
+        });
+      }
+    });
+
+    function submitRating() {
+      const stars = document.querySelectorAll('.star.selected').length;
+      const comment = document.getElementById('rating-comment').value.trim();
+      if (stars === 0) {
+        alert('Por favor selecciona al menos 1 estrella.');
+        return;
+      }
+      alert(`¡Gracias por tu calificación! 🌟 ${stars}/5 estrellas.\nComentario: ${comment || 'Ninguno'}`);
+      closeRatingModal();
+      showToast('Calificación enviada. ¡Gracias!');
+    }
+
     const map = L.map('map', {zoomControl:false}).setView([-2.160, -79.920], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
@@ -213,10 +293,17 @@
     L.marker(espolPos, {icon: L.icon({iconUrl: 'tortuga.png', iconSize: [60,60], iconAnchor: [30,60]})}).addTo(map);
 
     const startPos = L.latLng(-2.100, -79.910);
+
+    // RUTA ACTUALIZADA: Rogger → Tú (usuario) → ESPOL
     const fixedRoute = [
-      startPos, L.latLng(-2.105, -79.905), L.latLng(-2.125, -79.895),
-      L.latLng(-2.145, -79.885), L.latLng(-2.165, -79.875), L.latLng(-2.185, -79.865),
-      L.latLng(-2.195, -79.895), espolPos
+      startPos,
+      L.latLng(-2.105, -79.905),
+      L.latLng(-2.125, -79.895),
+      L.latLng(-2.140, -79.900),
+      L.latLng(-2.150, -79.900),
+      L.latLng(-2.175, -79.885),    // Rogger primero
+      L.latLng(-2.195, -79.895),    // Después recoge al usuario (tú)
+      espolPos                       // Finalmente a ESPOL
     ];
     L.polyline(fixedRoute, {color: '#800080', weight: 8, opacity: 0.7}).addTo(map);
 
@@ -243,7 +330,6 @@
       setTimeout(() => { toast.style.display = 'none'; }, 4000);
     }
 
-    // Tiempo límite de confirmación (3 minutos)
     const CONFIRM_LIMIT_SECONDS = 180;
     let confirmRemaining = CONFIRM_LIMIT_SECONDS;
     let confirmationsLocked = false;
@@ -309,7 +395,6 @@
     }
     animateMovement();
 
-    // Config cupos
     const MAX_PASAJEROS = 5;
     let asientosOcupados = 0;
     const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2570/2570.wav');
@@ -318,9 +403,9 @@
       {name: 'Javier Fernando Chávez Anchundia (Tú)', color:'#3498db', initial:'J', pos: L.latLng(-2.195, -79.895), draggable: true},
       {name: 'Samantha Sulay Luna Malta', color:'#9b59b6', initial:'S', pos: L.latLng(-2.105, -79.905), draggable: false},
       {name: 'Allan Steeven Espinoza Arcaya', color:'#2ecc71', initial:'A', pos: L.latLng(-2.125, -79.895), draggable: false},
-      {name: 'Steeven Jahir Pérez González', color:'#e74c3c', initial:'S', pos: L.latLng(-2.145, -79.885), draggable: false},
-      {name: 'Alexis Alejandro Saca Chauca', color:'#f39c12', initial:'A', pos: L.latLng(-2.165, -79.875), draggable: false},
-      {name: 'Rogger Christopher Gaibor Mejía', color:'#34495e', initial:'R', pos: L.latLng(-2.185, -79.865), draggable: false}
+      {name: 'Steeven Jahir Pérez González', color:'#e74c3c', initial:'S', pos: L.latLng(-2.150, -79.900), draggable: false},
+      {name: 'Alexis Alejandro Saca Chauca', color:'#f39c12', initial:'A', pos: L.latLng(-2.160, -79.895), draggable: false},
+      {name: 'Rogger Christopher Gaibor Mejía', color:'#34495e', initial:'R', pos: L.latLng(-2.175, -79.885), draggable: false}
     ];
 
     const confirmados = new Set();
